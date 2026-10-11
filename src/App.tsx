@@ -9,8 +9,8 @@ import { PromptAssistantSimulator } from './components/PromptAssistantSimulator'
 import { AuthModal } from './components/AuthModal';
 import { TaraChatbot } from './components/TaraChatbot';
 import { INITIAL_PROMPTS } from './services/mockData';
-import { PromptItem } from './types';
-import { Search, X, ArrowRight, Sparkles } from 'lucide-react';
+import { PromptItem, UserSession, UserType } from './types';
+import { Search, X, Sparkles } from 'lucide-react';
 
 export function App() {
   const [currentView, setCurrentView] = useState<'landing' | 'workspace' | 'enterprise' | 'developer' | 'analytics' | 'simulator'>('landing');
@@ -18,8 +18,26 @@ export function App() {
   const [isEnterpriseMode, setIsEnterpriseMode] = useState(true);
   const [prompts, setPrompts] = useState<PromptItem[]>(INITIAL_PROMPTS);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authInitialType, setAuthInitialType] = useState<UserType>('ENTERPRISE');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
+
+  // Persistent User Session
+  const [currentUser, setCurrentUser] = useState<UserSession | null>(() => {
+    try {
+      const saved = localStorage.getItem('tara_user_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Keep enterprise mode in sync with user session if available
+  useEffect(() => {
+    if (currentUser) {
+      setIsEnterpriseMode(currentUser.userType === 'ENTERPRISE');
+    }
+  }, [currentUser]);
 
   // Keyboard shortcut for Cmd+K
   useEffect(() => {
@@ -40,6 +58,37 @@ export function App() {
     setCurrentView(view as any);
     setCurrentSubTab(subTab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOpenAuth = (preferredType: UserType = 'ENTERPRISE') => {
+    setAuthInitialType(preferredType);
+    setIsAuthOpen(true);
+  };
+
+  const handleLoginSuccess = (userSession: UserSession) => {
+    setCurrentUser(userSession);
+    try {
+      localStorage.setItem('tara_user_session', JSON.stringify(userSession));
+    } catch (e) {
+      console.error('Failed to store session in localStorage', e);
+    }
+
+    if (userSession.userType === 'ENTERPRISE') {
+      setIsEnterpriseMode(true);
+      handleNavigate('enterprise');
+    } else {
+      setIsEnterpriseMode(false);
+      handleNavigate('workspace');
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem('tara_user_session');
+    } catch (e) {
+      console.error('Failed to clear session', e);
+    }
   };
 
   const handleUpdatePrompt = (updated: PromptItem) => {
@@ -77,7 +126,9 @@ export function App() {
         onSelectView={(v) => handleNavigate(v)}
         isEnterpriseMode={isEnterpriseMode}
         onToggleEnterpriseMode={() => setIsEnterpriseMode(!isEnterpriseMode)}
-        onOpenAuthModal={() => setIsAuthOpen(true)}
+        currentUser={currentUser}
+        onOpenAuthModal={handleOpenAuth}
+        onLogout={handleLogout}
         onOpenSearch={() => setIsSearchOpen(true)}
       />
 
@@ -86,7 +137,7 @@ export function App() {
         {currentView === 'landing' && (
           <LandingPage
             onNavigate={handleNavigate}
-            onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenAuth={() => handleOpenAuth('ENTERPRISE')}
           />
         )}
 
@@ -133,11 +184,12 @@ export function App() {
       {/* "Tara your friend" Floating AI Assistant */}
       <TaraChatbot onNavigateTab={handleNavigate} activeView={currentView} />
 
-      {/* Auth Modal */}
+      {/* Auth Modal with explicit Enterprise vs Public separation */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
-        onSuccess={() => {}}
+        onSuccess={handleLoginSuccess}
+        initialType={authInitialType}
       />
 
       {/* Cmd+K Quick Search Command Palette */}
@@ -156,7 +208,7 @@ export function App() {
               />
               <button
                 onClick={() => setIsSearchOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

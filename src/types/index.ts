@@ -4,6 +4,25 @@ export type PromptStatus = 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED' | 'DEPRECATED
 
 export type ModelCompatibility = 'GPT-4o' | 'Claude 3.5 Sonnet' | 'Gemini 1.5 Pro' | 'Llama 3' | 'Mistral Large';
 
+export type UserType = 'ENTERPRISE' | 'PUBLIC';
+
+export interface UserSession {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  userType: UserType;
+  role: string;
+  organization?: {
+    id: string;
+    name: string;
+    domain: string;
+    department: Department;
+    tier: 'Enterprise Custom' | 'Team Pro';
+  };
+  token: string;
+}
+
 export interface CoreMetrics {
   accuracy: number; // 0-100
   llmJudge: number; // 0-100
