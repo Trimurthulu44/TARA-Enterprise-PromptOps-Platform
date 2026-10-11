@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL 16 with pgvector extension
+  tara-postgres:
+    image: pgvector/pgvector:pg16
+    container_name: tara-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: tara_promptops
+      POSTGRES_USER: tara_admin
+      POSTGRES_PASSWORD: tara_secure_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tara_admin -d tara_promptops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis Cache & Token Bucket Rate Limiter
+  tara-redis:
+    image: redis:7-alpine
+    container_name: tara-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # 3. Java 21 Spring Boot 3 Backend
+  tara-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tara-backend
+    restart: always
+    depends_on:
+      tara-postgres:
+        condition: service_healthy
+      tara-redis:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://tara-postgres:5432/tara_promptops
+      SPRING_DATASOURCE_USERNAME: tara_admin
+      SPRING_DATASOURCE_PASSWORD: tara_secure_password_2026
+      SPRING_DATA_REDIS_HOST: tara-redis
+      TARA_AI_SERVICE_URL: http://tara-ai-service:8000
+    ports:
+      - "8080:8080"
+
+  # 4. Python 3.12 FastAPI AI Service
+  tara-ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: tara-ai-service
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      OPENAI_API_KEY: \${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: \${ANTHROPIC_API_KEY}
+
+  # 5. Frontend Client Application
+  tara-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tara-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - tara-backend
+
+volumes:
+  postgres_data:
+  redis_data:
